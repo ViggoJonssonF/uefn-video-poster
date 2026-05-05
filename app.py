@@ -7,13 +7,12 @@ import streamlit as st
 import base64
 import json
 import os
-import sys
 import tempfile
 import uuid
 from pathlib import Path
 from datetime import datetime
 
-# ── Page config ───────────────────────────────────────────────────────────────
+# -- Page config ---------------------------------------------------------------
 st.set_page_config(
     page_title="UEFN Video Poster",
     page_icon="🎮",
@@ -21,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Password login gate ───────────────────────────────────────────────────────
+# -- Password login gate -------------------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -39,34 +38,26 @@ if not st.session_state.authenticated:
                 st.error("Incorrect password.")
     st.stop()
 
-# ── Credentials dir (same location the uploaders expect) ─────────────────────
+# -- Credentials dir -----------------------------------------------------------
 CRED_DIR = Path(__file__).parent / "credentials"
 CRED_DIR.mkdir(exist_ok=True)
 
 
 @st.cache_resource
 def init_credentials():
-    """
-    Decode credentials from Streamlit secrets and write to the credentials folder.
-    Runs once per app session (cached).
-    """
     try:
-        # YouTube client secrets — same file for all 3 accounts
         yt_secrets = st.secrets["youtube_secrets"]
         for account in ["account1", "account2", "account3"]:
             (CRED_DIR / f"youtube_secrets_{account}.json").write_text(yt_secrets)
 
-        # YouTube OAuth tokens — stored as base64-encoded pickle
         for account in ["account1", "account2", "account3"]:
             key = f"youtube_token_{account}"
             if key in st.secrets:
                 token_bytes = base64.b64decode(st.secrets[key])
                 (CRED_DIR / f"youtube_token_{account}.pkl").write_bytes(token_bytes)
 
-        # TikTok app config
         (CRED_DIR / "tiktok_config.json").write_text(st.secrets["tiktok_config"])
 
-        # TikTok OAuth token
         if "tiktok_token" in st.secrets:
             (CRED_DIR / "tiktok_token.json").write_text(st.secrets["tiktok_token"])
 
@@ -77,7 +68,7 @@ def init_credentials():
 
 ok, err = init_credentials()
 
-# ── Load persistent history from Google Sheets (once per session) ─────────────
+# -- Load history from Google Sheets (once per session) -----------------------
 if "history" not in st.session_state:
     try:
         from sheets_logger import load_history
@@ -85,26 +76,25 @@ if "history" not in st.session_state:
     except Exception:
         st.session_state.history = []
 
-# ── Session state ─────────────────────────────────────────────────────────────
 if "queue" not in st.session_state:
     st.session_state.queue = []
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# -- Sidebar -------------------------------------------------------------------
 with st.sidebar:
-    st.title("🎮 UEFN Video Poster")
+    st.title("UEFN Video Poster")
     st.caption("Post to all accounts in one click.")
-    if st.button("🔒 Log out", use_container_width=True):
+    if st.button("Log out", use_container_width=True):
         st.session_state.authenticated = False
         st.rerun()
     st.divider()
 
     if not ok:
-        st.error(f"⚠️ Credentials error:\n{err}")
+        st.error(f"Credentials error:\n{err}")
     else:
-        st.success("✅ All credentials loaded")
+        st.success("All credentials loaded")
 
     st.divider()
-    st.subheader("📋 Recent Posts")
+    st.subheader("Recent Posts")
     if not st.session_state.history:
         st.caption("No posts yet.")
     else:
@@ -113,16 +103,15 @@ with st.sidebar:
             time_str = h.get("time", "")
             stamp = f"{date_str} {time_str}".strip() if date_str else time_str
             st.caption(f"**{h['title'][:28]}**")
-            st.caption(f"🕐 {stamp}")
-            st.caption(f"📤 {h['platforms']}")
+            st.caption(f"Time: {stamp}")
+            st.caption(f"Platforms: {h['platforms']}")
             st.divider()
 
-# Stop here if credentials failed
 if not ok:
-    st.error("Credentials could not be loaded from Streamlit secrets. See sidebar for details.")
+    st.error("Credentials could not be loaded. See sidebar for details.")
     st.stop()
 
-# ── Main layout ───────────────────────────────────────────────────────────────
+# -- Upload form ---------------------------------------------------------------
 st.header("Add Video to Queue")
 
 with st.form("upload_form", clear_on_submit=True):
@@ -136,7 +125,7 @@ with st.form("upload_form", clear_on_submit=True):
     with col1:
         title = st.text_input(
             "Title / TikTok Caption *",
-            placeholder="Check out my Robbery Bob map! 🎮 #fortnite #uefn",
+            placeholder="Check out my Robbery Bob map! #fortnite #uefn",
         )
     with col2:
         privacy = st.selectbox("Privacy", ["Public", "Private", "Unlisted"])
@@ -163,7 +152,7 @@ with st.form("upload_form", clear_on_submit=True):
     with pc4:
         use_tt = st.checkbox("TikTok", value=True)
 
-    submitted = st.form_submit_button("➕ Add to Queue", type="primary")
+    submitted = st.form_submit_button("Add to Queue", type="primary")
 
     if submitted:
         if not video_file:
@@ -190,9 +179,9 @@ with st.form("upload_form", clear_on_submit=True):
                 "added_at": datetime.now().strftime("%H:%M:%S"),
             }
             st.session_state.queue.append(item)
-            st.success(f"✅ **{title[:50]}** added to queue!")
+            st.success(f"Added to queue: {title[:50]}")
 
-# ── Queue ─────────────────────────────────────────────────────────────────────
+# -- Queue ---------------------------------------------------------------------
 st.divider()
 pending_count = sum(1 for x in st.session_state.queue if x["status"] == "pending")
 st.header(f"Queue — {len(st.session_state.queue)} item(s), {pending_count} pending")
@@ -200,9 +189,8 @@ st.header(f"Queue — {len(st.session_state.queue)} item(s), {pending_count} pen
 if not st.session_state.queue:
     st.info("Queue is empty. Add a video above to get started.")
 else:
-    # Post All button
     if pending_count > 0:
-        if st.button("🚀 Post All Pending", type="primary"):
+        if st.button("Post All Pending", type="primary"):
             for item in st.session_state.queue:
                 if item["status"] != "pending":
                     continue
@@ -211,8 +199,7 @@ else:
                 accounts = [k for k, v in item["platforms"].items() if v and k != "tiktok"]
                 do_tiktok = item["platforms"].get("tiktok", False)
 
-                with st.status(f"📤 Posting **{item['title'][:40]}**...", expanded=True) as s:
-                    # Write video to a temp file
+                with st.status(f"Posting: {item['title'][:40]}...", expanded=True) as s:
                     suffix = Path(item["video_name"]).suffix
                     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                         tmp.write(item["video_bytes"])
@@ -220,7 +207,7 @@ else:
 
                     any_success = False
 
-                    # ── YouTube (each account isolated) ───────────────────────
+                    # YouTube — each account isolated
                     if accounts:
                         st.write(f"Uploading to YouTube ({', '.join(accounts)})...")
                         try:
@@ -236,15 +223,15 @@ else:
                             item["results"].extend(yt_results)
                             for r in yt_results:
                                 if "error" in r:
-                                    st.error(f"❌ {r['account']}: {r['error']}")
+                                    st.error(f"YouTube {r['account']}: {r['error']}")
                                 else:
                                     any_success = True
-                                    st.write(f"✅ YouTube {r['account']}: {r['url']}")
+                                    st.write(f"YouTube {r['account']}: {r['url']}")
                         except Exception as yt_err:
                             item["results"].append({"error": str(yt_err), "platform": "youtube"})
-                            st.error(f"❌ YouTube error: {yt_err}")
+                            st.error(f"YouTube error: {yt_err}")
 
-                    # ── TikTok (isolated so YouTube success still logs) ────────
+                    # TikTok — isolated so YouTube success still logs to Sheets
                     if do_tiktok:
                         st.write("Uploading to TikTok...")
                         try:
@@ -262,34 +249,31 @@ else:
                             )
                             item["results"].append(tt_result)
                             any_success = True
-                            st.write(f"✅ TikTok: {tt_result.get('status')}")
+                            st.write(f"TikTok: {tt_result.get('status')}")
                         except Exception as tt_err:
                             item["results"].append({"error": str(tt_err), "platform": "tiktok"})
-                            st.error(f"❌ TikTok error: {tt_err}")
+                            st.error(f"TikTok error: {tt_err}")
 
-                    # ── Determine overall status ───────────────────────────────
-                    all_failed = not any_success
-                    item["status"] = "failed" if all_failed else "done"
-                    if all_failed:
-                        s.update(label=f"❌ Failed — {item['title'][:40]}", state="error")
+                    # Overall status
+                    item["status"] = "failed" if not any_success else "done"
+                    if not any_success:
+                        s.update(label=f"Failed: {item['title'][:40]}", state="error")
                     else:
-                        s.update(label=f"✅ Done — {item['title'][:40]}", state="complete")
+                        s.update(label=f"Done: {item['title'][:40]}", state="complete")
 
-                    # ── Log to Google Sheets whenever at least one platform succeeded ──
-                    if not all_failed:
+                    # Log to Sheets whenever at least one platform succeeded
+                    if any_success:
                         platforms_str = ", ".join(
-                            (["YT " + k for k, v in item["platforms"].items() if v and k != "tiktok"])
+                            ["YT " + k for k, v in item["platforms"].items() if v and k != "tiktok"]
                             + (["TikTok"] if do_tiktok else [])
                         )
-                        history_entry = {
+                        st.session_state.history.append({
                             "title": item["title"],
                             "time": datetime.now().strftime("%H:%M"),
                             "date": datetime.now().strftime("%Y-%m-%d"),
                             "platforms": platforms_str,
                             "privacy": item["privacy"],
-                        }
-                        st.session_state.history.append(history_entry)
-
+                        })
                         try:
                             from sheets_logger import log_post
                             logged = log_post(
@@ -299,58 +283,57 @@ else:
                                 results=item["results"],
                             )
                             if logged:
-                                st.write("📊 Logged to Google Sheets")
+                                st.write("Logged to Google Sheets")
                             else:
-                                st.warning("⚠️ Sheets logging skipped (check secrets or sheet sharing)")
+                                st.warning("Sheets logging skipped (check secrets or sheet sharing)")
                         except Exception as sheets_err:
-                            st.warning(f"⚠️ Sheets logging failed: {sheets_err}")
-                    finally:
-                        try:
-                            os.unlink(tmp_path)
-                        except Exception:
-                            pass
+                            st.warning(f"Sheets logging failed: {sheets_err}")
+
+                    # Clean up temp file
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
 
             st.rerun()
 
-    # Clear completed button
     done_count = sum(1 for x in st.session_state.queue if x["status"] in ("done", "failed"))
     if done_count > 0:
-        if st.button(f"🗑️ Clear {done_count} finished item(s)"):
-            st.session_state.queue = [x for x in st.session_state.queue if x["status"] not in ("done", "failed")]
+        if st.button(f"Clear {done_count} finished item(s)"):
+            st.session_state.queue = [
+                x for x in st.session_state.queue
+                if x["status"] not in ("done", "failed")
+            ]
             st.rerun()
 
     st.write("")
 
-    # Queue item display
-    status_icons = {"pending": "⏳", "uploading": "🔄", "done": "✅", "failed": "❌"}
-
     for i, item in enumerate(st.session_state.queue):
-        icon = status_icons.get(item["status"], "⏳")
-        platforms = []
-        for k, v in item["platforms"].items():
-            if v:
-                platforms.append("TikTok" if k == "tiktok" else f"YT {k}")
+        status = item["status"]
+        platforms = [
+            "TikTok" if k == "tiktok" else f"YT {k}"
+            for k, v in item["platforms"].items() if v
+        ]
 
         with st.container(border=True):
             c1, c2 = st.columns([5, 1])
             with c1:
-                st.markdown(f"**{icon} {item['title'][:60]}**")
+                st.markdown(f"**[{status}] {item['title'][:60]}**")
                 st.caption(
-                    f"📁 {item['video_name']}  ·  "
-                    f"🔒 {item['privacy'].title()}  ·  "
-                    f"📤 {', '.join(platforms)}  ·  "
-                    f"⏰ Added {item['added_at']}  ·  "
-                    f"Status: `{item['status']}`"
+                    f"File: {item['video_name']}  |  "
+                    f"Privacy: {item['privacy'].title()}  |  "
+                    f"Platforms: {', '.join(platforms)}  |  "
+                    f"Added: {item['added_at']}"
                 )
                 for r in item["results"]:
                     if "error" in r:
-                        st.error(f"❌ {r.get('account') or r.get('platform', '?')}: {r['error'][:100]}")
+                        st.error(f"{r.get('account') or r.get('platform', '?')}: {r['error'][:100]}")
                     elif r.get("platform") == "tiktok":
-                        st.success(f"✅ TikTok — {r.get('status', 'posted')}")
+                        st.success(f"TikTok: {r.get('status', 'posted')}")
                     elif "url" in r:
-                        st.success(f"✅ YouTube {r.get('account')} — [View video]({r['url']})")
+                        st.success(f"YouTube {r.get('account')}: {r['url']}")
             with c2:
                 if item["status"] == "pending":
-                    if st.button("🗑️ Remove", key=f"rm_{item['id']}"):
+                    if st.button("Remove", key=f"rm_{item['id']}"):
                         st.session_state.queue.pop(i)
                         st.rerun()
