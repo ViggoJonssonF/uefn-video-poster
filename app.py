@@ -21,6 +21,24 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Password login gate ───────────────────────────────────────────────────────
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.markdown("## 🎮 UEFN Video Poster")
+    st.markdown("Enter the password to access the app.")
+    with st.form("login_form"):
+        pw = st.text_input("Password", type="password")
+        login = st.form_submit_button("Log in", type="primary")
+        if login:
+            if pw == st.secrets.get("app_password", ""):
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Incorrect password.")
+    st.stop()
+
 # ── Credentials dir (same location the uploaders expect) ─────────────────────
 CRED_DIR = Path(__file__).parent / "credentials"
 CRED_DIR.mkdir(exist_ok=True)
@@ -59,16 +77,25 @@ def init_credentials():
 
 ok, err = init_credentials()
 
+# ── Load persistent history from Google Sheets (once per session) ─────────────
+if "history" not in st.session_state:
+    try:
+        from sheets_logger import load_history
+        st.session_state.history = load_history()
+    except Exception:
+        st.session_state.history = []
+
 # ── Session state ─────────────────────────────────────────────────────────────
 if "queue" not in st.session_state:
     st.session_state.queue = []
-if "history" not in st.session_state:
-    st.session_state.history = []
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🎮 UEFN Video Poster")
     st.caption("Post to all accounts in one click.")
+    if st.button("🔒 Log out", use_container_width=True):
+        st.session_state.authenticated = False
+        st.rerun()
     st.divider()
 
     if not ok:
@@ -79,11 +106,15 @@ with st.sidebar:
     st.divider()
     st.subheader("📋 Recent Posts")
     if not st.session_state.history:
-        st.caption("No posts yet this session.")
+        st.caption("No posts yet.")
     else:
-        for h in reversed(st.session_state.history[-10:]):
-            st.caption(f"**{h['title'][:30]}**")
-            st.caption(f"🕐 {h['time']} · {h['platforms']}")
+        for h in reversed(st.session_state.history[-15:]):
+            date_str = h.get("date", "")
+            time_str = h.get("time", "")
+            stamp = f"{date_str} {time_str}".strip() if date_str else time_str
+            st.caption(f"**{h['title'][:28]}**")
+            st.caption(f"🕐 {stamp}")
+            st.caption(f"📤 {h['platforms']}")
             st.divider()
 
 # Stop here if credentials failed
@@ -228,16 +259,35 @@ else:
                         item["status"] = "done"
                         s.update(label=f"✅ Done — {item['title'][:40]}", state="complete")
 
-                        # Add to history
+                        # ── Build history entry and log to Google Sheets ──────
                         platforms_str = ", ".join(
                             (["YT " + k for k, v in item["platforms"].items() if v and k != "tiktok"])
                             + (["TikTok"] if do_tiktok else [])
                         )
-                        st.session_state.history.append({
+                        history_entry = {
                             "title": item["title"],
                             "time": datetime.now().strftime("%H:%M"),
+                            "date": datetime.now().strftime("%Y-%m-%d"),
                             "platforms": platforms_str,
-                        })
+                            "privacy": item["privacy"],
+                        }
+                        st.session_state.history.append(history_entry)
+
+                        # Log to Google Sheets (non-fatal if it fails)
+                        try:
+                            from sheets_logger import log_post
+                            logged = log_post(
+                                title=item["title"],
+                                platforms=platforms_str,
+                                privacy=item["privacy"],
+                                results=item["results"],
+                            )
+                            if logged:
+                                st.write("📊 Logged to Google Sheets")
+                            else:
+                                st.warning("⚠️ Sheets logging skipped (check secrets or sheet sharing)")
+                        except Exception as sheets_err:
+                            st.warning(f"⚠️ Sheets logging failed: {sheets_err}")
 
                     except Exception as e:
                         item["status"] = "failed"
@@ -263,7 +313,6 @@ else:
 
     # Queue item display
     status_icons = {"pending": "⏳", "uploading": "🔄", "done": "✅", "failed": "❌"}
-    status_colors = {"pending": "blue", "uploading": "orange", "done": "green", "failed": "red"}
 
     for i, item in enumerate(st.session_state.queue):
         icon = status_icons.get(item["status"], "⏳")
