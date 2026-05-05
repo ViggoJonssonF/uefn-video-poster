@@ -218,10 +218,12 @@ else:
                         tmp.write(item["video_bytes"])
                         tmp_path = tmp.name
 
-                    try:
-                        # YouTube
-                        if accounts:
-                            st.write(f"Uploading to YouTube ({', '.join(accounts)})...")
+                    any_success = False
+
+                    # ── YouTube (each account isolated) ───────────────────────
+                    if accounts:
+                        st.write(f"Uploading to YouTube ({', '.join(accounts)})...")
+                        try:
                             from youtube_uploader import upload_to_all_accounts
                             yt_results = upload_to_all_accounts(
                                 account_names=accounts,
@@ -236,11 +238,16 @@ else:
                                 if "error" in r:
                                     st.error(f"❌ {r['account']}: {r['error']}")
                                 else:
+                                    any_success = True
                                     st.write(f"✅ YouTube {r['account']}: {r['url']}")
+                        except Exception as yt_err:
+                            item["results"].append({"error": str(yt_err), "platform": "youtube"})
+                            st.error(f"❌ YouTube error: {yt_err}")
 
-                        # TikTok
-                        if do_tiktok:
-                            st.write("Uploading to TikTok...")
+                    # ── TikTok (isolated so YouTube success still logs) ────────
+                    if do_tiktok:
+                        st.write("Uploading to TikTok...")
+                        try:
                             tiktok_privacy_map = {
                                 "public": "PUBLIC_TO_EVERYONE",
                                 "unlisted": "MUTUAL_FOLLOW_FRIENDS",
@@ -254,12 +261,22 @@ else:
                                 privacy_level=tiktok_privacy_map.get(item["privacy"], "SELF_ONLY"),
                             )
                             item["results"].append(tt_result)
+                            any_success = True
                             st.write(f"✅ TikTok: {tt_result.get('status')}")
+                        except Exception as tt_err:
+                            item["results"].append({"error": str(tt_err), "platform": "tiktok"})
+                            st.error(f"❌ TikTok error: {tt_err}")
 
-                        item["status"] = "done"
+                    # ── Determine overall status ───────────────────────────────
+                    all_failed = not any_success
+                    item["status"] = "failed" if all_failed else "done"
+                    if all_failed:
+                        s.update(label=f"❌ Failed — {item['title'][:40]}", state="error")
+                    else:
                         s.update(label=f"✅ Done — {item['title'][:40]}", state="complete")
 
-                        # ── Build history entry and log to Google Sheets ──────
+                    # ── Log to Google Sheets whenever at least one platform succeeded ──
+                    if not all_failed:
                         platforms_str = ", ".join(
                             (["YT " + k for k, v in item["platforms"].items() if v and k != "tiktok"])
                             + (["TikTok"] if do_tiktok else [])
@@ -273,7 +290,6 @@ else:
                         }
                         st.session_state.history.append(history_entry)
 
-                        # Log to Google Sheets (non-fatal if it fails)
                         try:
                             from sheets_logger import log_post
                             logged = log_post(
@@ -288,12 +304,6 @@ else:
                                 st.warning("⚠️ Sheets logging skipped (check secrets or sheet sharing)")
                         except Exception as sheets_err:
                             st.warning(f"⚠️ Sheets logging failed: {sheets_err}")
-
-                    except Exception as e:
-                        item["status"] = "failed"
-                        item["results"].append({"error": str(e)})
-                        s.update(label=f"❌ Failed — {item['title'][:40]}", state="error")
-                        st.error(str(e))
                     finally:
                         try:
                             os.unlink(tmp_path)

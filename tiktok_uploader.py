@@ -33,7 +33,7 @@ MAX_CHUNK_SIZE = 64 * 1024 * 1024
 DEFAULT_CHUNK_SIZE = 10 * 1024 * 1024
 
 # TikTok does not allow localhost redirect URIs.
-# We use the GitHub Pages URL — after authorizing, the browser will land on a
+# We use the GitHub Pages URL -- after authorizing, the browser will land on a
 # 404 page. That's fine! Just copy the full URL from the address bar and paste it.
 REDIRECT_URI = "https://viggojonssonf.github.io/callback"
 
@@ -90,7 +90,7 @@ def authorize(config: dict) -> dict:
     """
     Run the OAuth 2.0 authorization flow for TikTok.
     Opens a browser for login. After authorizing, TikTok redirects to a GitHub
-    Pages URL that will show a 404 — that's expected. Just copy the full URL
+    Pages URL that will show a 404 -- that's expected. Just copy the full URL
     from the browser address bar and paste it into the terminal.
     """
     params = {
@@ -111,7 +111,6 @@ def authorize(config: dict) -> dict:
     print("  Copy the FULL URL from your browser's address bar and paste it below.\n")
     callback_url = input("  Paste the full redirect URL here: ").strip()
 
-    # Parse the authorization code from the pasted URL
     parsed = urllib.parse.urlparse(callback_url)
     params_parsed = urllib.parse.parse_qs(parsed.query)
     if "code" not in params_parsed:
@@ -154,7 +153,6 @@ def get_valid_token() -> tuple[dict, dict]:
         token_data = authorize(config)
         return config, token_data
 
-    # Check if access token is expired (with 5 min buffer)
     expires_in = token_data.get("expires_in", 86400)
     obtained_at = token_data.get("obtained_at", 0)
     if time.time() > obtained_at + expires_in - 300:
@@ -198,7 +196,6 @@ def upload_video(
         raise FileNotFoundError(f"Video file not found: {video_path}")
 
     video_size = video_path.stat().st_size
-    # chunk_size must never exceed the actual file size — TikTok rejects the mismatch
     chunk_size = min(DEFAULT_CHUNK_SIZE, video_size)
     total_chunks = math.ceil(video_size / chunk_size)
 
@@ -209,11 +206,9 @@ def upload_video(
     access_token = token_data["access_token"]
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
-    # Combine title + description into a single caption (TikTok style)
     caption = title if title == description else f"{title}\n\n{description}"
     caption = caption[:2200]
 
-    # Step 1: Initialize the upload
     init_payload = {
         "post_info": {
             "title": caption,
@@ -246,7 +241,6 @@ def upload_video(
     publish_id = init_data["data"]["publish_id"]
     print(f"  [TikTok] Publish ID: {publish_id}")
 
-    # Step 2: Upload video chunks
     with open(video_path, "rb") as f:
         for chunk_index in range(total_chunks):
             chunk_data = f.read(chunk_size)
@@ -273,12 +267,11 @@ def upload_video(
             else:
                 raise RuntimeError(f"Failed to upload chunk {chunk_index + 1}: HTTP {chunk_resp.status_code}")
 
-    print(f"\n  [TikTok] ✓ All chunks uploaded!")
+    print(f"\n  [TikTok] All chunks uploaded!")
 
-    # Step 3: Poll status until published or failed
     print("  [TikTok] Waiting for TikTok to process the video...")
     status_headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-    max_wait = 120  # seconds
+    max_wait = 120
     poll_interval = 5
     elapsed = 0
 
@@ -294,7 +287,7 @@ def upload_video(
         print(f"\r  [TikTok] Status: {pub_status} ({elapsed}s elapsed)", end="", flush=True)
 
         if pub_status == "PUBLISH_COMPLETE":
-            print(f"\n  [TikTok] ✓ Video published successfully!")
+            print(f"\n  [TikTok] Video published successfully!")
             return {"platform": "tiktok", "publish_id": publish_id, "status": pub_status}
         elif pub_status in ["FAILED", "CANCELLED"]:
             fail_reason = status_data.get("data", {}).get("fail_reason", "Unknown")
@@ -302,4 +295,3 @@ def upload_video(
 
     print(f"\n  [TikTok] Note: Video is still processing (publish_id: {publish_id}). Check TikTok app.")
     return {"platform": "tiktok", "publish_id": publish_id, "status": "PROCESSING"}
-                                                             
