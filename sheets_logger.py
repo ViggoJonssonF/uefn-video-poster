@@ -18,7 +18,13 @@ def _get_client():
     """Return an authorised gspread client. Cached per app session."""
     import gspread
 
-    creds_info = json.loads(st.secrets["sheets_service_account"])
+    raw = st.secrets["sheets_service_account"]
+    # Streamlit TOML may pre-expand \n inside the JSON string into real newlines,
+    # making json.loads() reject them as control characters. strict=False allows it.
+    if isinstance(raw, str):
+        creds_info = json.JSONDecoder(strict=False).decode(raw)
+    else:
+        creds_info = dict(raw)  # already a TOML table / dict
     return gspread.service_account_from_dict(creds_info)
 
 
