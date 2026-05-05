@@ -283,10 +283,13 @@ else:
                                 results=item["results"],
                             )
                             if logged:
+                                item["sheets_status"] = "logged"
                                 st.write("Logged to Google Sheets")
                             else:
+                                item["sheets_status"] = "skipped: secrets not configured"
                                 st.warning("Sheets logging skipped (check secrets or sheet sharing)")
                         except Exception as sheets_err:
+                            item["sheets_status"] = f"error: {sheets_err}"
                             st.warning(f"Sheets logging failed: {sheets_err}")
 
                     # Clean up temp file
@@ -332,6 +335,12 @@ else:
                         st.success(f"TikTok: {r.get('status', 'posted')}")
                     elif "url" in r:
                         st.success(f"YouTube {r.get('account')}: {r['url']}")
+                if "sheets_status" in item:
+                    ss = item["sheets_status"]
+                    if ss == "logged":
+                        st.success("Sheets: logged")
+                    else:
+                        st.warning(f"Sheets: {ss}")
             with c2:
                 if item["status"] == "pending":
                     if st.button("Remove", key=f"rm_{item['id']}"):

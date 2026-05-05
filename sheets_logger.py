@@ -17,12 +17,9 @@ SHEET_HEADERS = ["Date", "Time", "Title", "Platforms", "Privacy", "YouTube URLs"
 def _get_client():
     """Return an authorised gspread client. Cached per app session."""
     import gspread
-    from google.oauth2.service_account import Credentials
 
     creds_info = json.loads(st.secrets["sheets_service_account"])
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-    return gspread.authorize(creds)
+    return gspread.service_account_from_dict(creds_info)
 
 
 def _get_sheet():
