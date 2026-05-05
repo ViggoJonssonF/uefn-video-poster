@@ -8,8 +8,11 @@ Sheet columns: Date | Time | Title | Platforms | Privacy | YouTube URLs | TikTok
 
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import streamlit as st
+
+_STOCKHOLM = ZoneInfo("Europe/Stockholm")
 
 SHEET_HEADERS = ["Date", "Time", "Title", "Platforms", "Privacy", "YouTube URLs", "TikTok Status"]
 
@@ -53,17 +56,17 @@ def load_history() -> list[dict]:
         return []
     try:
         sheet = _get_sheet()
-        records = sheet.get_all_records()
+        records = sheet.get_all_records(numericise_ignore=["all"])
         history = []
         for r in records:
             history.append({
-                "title": r.get("Title", ""),
-                "time": r.get("Time", ""),
-                "platforms": r.get("Platforms", ""),
-                "date": r.get("Date", ""),
-                "privacy": r.get("Privacy", ""),
-                "yt_urls": r.get("YouTube URLs", ""),
-                "tt_status": r.get("TikTok Status", ""),
+                "title": str(r.get("Title", "") or ""),
+                "time": str(r.get("Time", "") or ""),
+                "platforms": str(r.get("Platforms", "") or ""),
+                "date": str(r.get("Date", "") or ""),
+                "privacy": str(r.get("Privacy", "") or ""),
+                "yt_urls": str(r.get("YouTube URLs", "") or ""),
+                "tt_status": str(r.get("TikTok Status", "") or ""),
             })
         return history
     except Exception:
@@ -79,7 +82,7 @@ def log_post(title: str, platforms: str, privacy: str, results: list) -> bool:
         return False
     # Let exceptions bubble up so the caller can display them
     sheet = _get_sheet()
-    now = datetime.now()
+    now = datetime.now(_STOCKHOLM)
 
     yt_urls = ", ".join(r.get("url", "") for r in results if "url" in r)
     tt_status = next(

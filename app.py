@@ -11,11 +11,14 @@ import tempfile
 import uuid
 from pathlib import Path
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_STOCKHOLM = ZoneInfo("Europe/Stockholm")
 
 # -- Page config ---------------------------------------------------------------
 st.set_page_config(
-    page_title="UEFN Video Poster",
-    page_icon="🎮",
+    page_title="Brxce Wayne — Video Poster",
+    page_icon="🦇",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -81,7 +84,7 @@ if "queue" not in st.session_state:
 
 # -- Sidebar -------------------------------------------------------------------
 with st.sidebar:
-    st.title("UEFN Video Poster")
+    st.markdown("# 🦇 Brxce Wayne")
     st.caption("Post to all accounts in one click.")
     if st.button("Log out", use_container_width=True):
         st.session_state.authenticated = False
@@ -102,9 +105,9 @@ with st.sidebar:
             date_str = h.get("date", "")
             time_str = h.get("time", "")
             stamp = f"{date_str} {time_str}".strip() if date_str else time_str
-            st.caption(f"**{h['title'][:28]}**")
+            st.caption(f"**{str(h.get('title', ''))[:28]}**")
             st.caption(f"Time: {stamp}")
-            st.caption(f"Platforms: {h['platforms']}")
+            st.caption(f"Platforms: {str(h.get('platforms', ''))}")
             st.divider()
 
 if not ok:
@@ -112,7 +115,7 @@ if not ok:
     st.stop()
 
 # -- Upload form ---------------------------------------------------------------
-st.header("Add Video to Queue")
+st.markdown("## 🦇 Add Video to Queue")
 
 with st.form("upload_form", clear_on_submit=True):
     video_file = st.file_uploader(
@@ -176,7 +179,7 @@ with st.form("upload_form", clear_on_submit=True):
                 },
                 "status": "pending",
                 "results": [],
-                "added_at": datetime.now().strftime("%H:%M:%S"),
+                "added_at": datetime.now(_STOCKHOLM).strftime("%H:%M:%S"),
             }
             st.session_state.queue.append(item)
             st.success(f"Added to queue: {title[:50]}")
@@ -267,10 +270,11 @@ else:
                             ["YT " + k for k, v in item["platforms"].items() if v and k != "tiktok"]
                             + (["TikTok"] if do_tiktok else [])
                         )
+                        _now = datetime.now(_STOCKHOLM)
                         st.session_state.history.append({
                             "title": item["title"],
-                            "time": datetime.now().strftime("%H:%M"),
-                            "date": datetime.now().strftime("%Y-%m-%d"),
+                            "time": _now.strftime("%H:%M"),
+                            "date": _now.strftime("%Y-%m-%d"),
                             "platforms": platforms_str,
                             "privacy": item["privacy"],
                         })
